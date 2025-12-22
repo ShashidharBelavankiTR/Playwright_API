@@ -29,6 +29,7 @@ export const test = base.extend<CustomFixtures>({
     await context.addInitScript(() => {
       // Auto-accept cookies logic can be added here
       window.localStorage.setItem('cookiesAccepted', 'true');
+      window.localStorage.setItem('popupsAccepted', 'true');
     });
 
     await use(context);

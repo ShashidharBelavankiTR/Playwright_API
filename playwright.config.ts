@@ -39,7 +39,11 @@ export default defineConfig({
     trace: 'on-first-retry',
     
     /* Screenshot settings */
-    screenshot: process.env.SCREENSHOT_ON_FAILURE === 'true' ? 'only-on-failure' : 'off',
+    screenshot: process.env.SCREENSHOT_ON_FAILURE === 'true' 
+      ? 'only-on-failure' 
+      : process.env.SCREENSHOT_ON_SUCCESS === 'true' 
+        ? 'on' 
+        : 'off',
     
     /* Video settings */
     video: process.env.VIDEO_ON_FAILURE === 'retain-on-failure' ? 'retain-on-failure' : 'off',
@@ -56,73 +60,69 @@ export default defineConfig({
       height: Number(process.env.VIEWPORT_HEIGHT) || 1080,
     },
     
+    /* Slow down actions */
+    launchOptions: {
+      slowMo: Number(process.env.SLOW_MO) || 0,
+    },
+    
     /* Emulate browser locale and timezone */
     locale: 'en-US',
     timezoneId: 'America/New_York',
   },
 
   /* Configure projects for major browsers */
-  projects: [
-    {
-      name: 'chromium',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-
-    {
-      name: 'firefox',
-      use: { 
-        ...devices['Desktop Firefox'],
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-
-    {
-      name: 'webkit',
-      use: { 
-        ...devices['Desktop Safari'],
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-
-    /* Test against mobile viewports */
-    {
-      name: 'Mobile Chrome',
-      use: { 
-        ...devices['Pixel 5'],
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { 
-        ...devices['iPhone 12'],
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-
-    /* Test against branded browsers */
-    {
-      name: 'Microsoft Edge',
-      use: { 
-        ...devices['Desktop Edge'], 
-        channel: 'msedge',
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-    {
-      name: 'Google Chrome',
-      use: { 
-        ...devices['Desktop Chrome'], 
-        channel: 'chrome',
-        headless: process.env.HEADLESS === 'true',
-      },
-    },
-  ],
+  projects: (process.env.BROWSER 
+    ? [
+        // Use the browser specified in .env
+        ...(process.env.BROWSER === 'chromium' ? [{
+          name: 'chromium',
+          use: { 
+            ...devices['Desktop Chrome'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        }] : []),
+        ...(process.env.BROWSER === 'firefox' ? [{
+          name: 'firefox',
+          use: { 
+            ...devices['Desktop Firefox'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        }] : []),
+        ...(process.env.BROWSER === 'webkit' ? [{
+          name: 'webkit',
+          use: { 
+            ...devices['Desktop Safari'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        }] : []),
+      ]
+    : [
+        // Default to all browsers if BROWSER is not specified
+        {
+          name: 'chromium',
+          use: { 
+            ...devices['Desktop Chrome'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        },
+        {
+          name: 'firefox',
+          use: { 
+            ...devices['Desktop Firefox'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        },
+        {
+          name: 'webkit',
+          use: { 
+            ...devices['Desktop Safari'],
+            headless: process.env.HEADLESS === 'true',
+          },
+        },
+      ]
+  ),
 
   /* Global setup and teardown */
-  // globalSetup: require.resolve('./src/config/global-setup'),
-  // globalTeardown: require.resolve('./src/config/global-teardown'),
+  globalSetup: require.resolve('./src/config/global-setup'),
+  globalTeardown: require.resolve('./src/config/global-teardown'),
 });

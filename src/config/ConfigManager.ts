@@ -45,7 +45,7 @@ export class ConfigManager {
       viewportWidth: Number(process.env.VIEWPORT_WIDTH) || 1920,
       viewportHeight: Number(process.env.VIEWPORT_HEIGHT) || 1080,
       parallelWorkers: Number(process.env.PARALLEL_WORKERS) || 4,
-      retries: Number(process.env.RETRIES) || 1,
+      retries: Number(process.env.RETRIES) || 0,
       slowMo: Number(process.env.SLOW_MO) || 0,
       logLevel: (process.env.LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug') || 'info',
       logToFile: process.env.LOG_TO_FILE === 'true',
