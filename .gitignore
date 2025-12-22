@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+test-results/
+playwright-report/
+playwright/.cache/
+reports/
+screenshots/*.png
+*.log
+.DS_Store
+package-lock.json
+coverage/
+.vscode/
+.idea/
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

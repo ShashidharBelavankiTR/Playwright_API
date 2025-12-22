@@ -1,0 +1,38 @@
+{
+  "users": {
+    "validUser": {
+      "email": "test@example.com",
+      "password": "Password123!",
+      "username": "testuser"
+    },
+    "invalidUser": {
+      "email": "invalid@example.com",
+      "password": "wrongpassword"
+    },
+    "admin": {
+      "email": "admin@example.com",
+      "password": "AdminPass123!",
+      "role": "admin"
+    }
+  },
+  "products": {
+    "laptop": {
+      "name": "Gaming Laptop",
+      "price": 1299.99,
+      "category": "Electronics",
+      "inStock": true
+    },
+    "smartphone": {
+      "name": "Smartphone Pro",
+      "price": 899.99,
+      "category": "Electronics",
+      "inStock": true
+    }
+  },
+  "searchTerms": [
+    "laptop",
+    "smartphone",
+    "tablet",
+    "headphones"
+  ]
+}
