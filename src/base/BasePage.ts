@@ -166,7 +166,15 @@ export class BasePage {
         logger.logAction('Click', selector);
         const element = this.resolveLocator(locator);
         await WaitHelper.retryWithBackoff(async () => {
+          // Wait for element to be visible and attached
           await element.waitFor({ state: 'visible', timeout: 10000 });
+          // Wait for element to be enabled
+          await element.waitFor({ state: 'attached', timeout: 5000 });
+          // Additional check for enabled state
+          const isEnabled = await element.isEnabled();
+          if (!isEnabled) {
+            throw new Error(`Element ${selector} is not enabled`);
+          }
           await element.click(options);
         }, 2, 500);
         logger.info(`Clicked on element: ${selector}`);
@@ -191,7 +199,12 @@ export class BasePage {
         logger.logAction('Double click', selector);
         const element = this.resolveLocator(locator);
         await WaitHelper.retryWithBackoff(async () => {
+          // Wait for element to be visible and enabled
           await element.waitFor({ state: 'visible', timeout: 10000 });
+          const isEnabled = await element.isEnabled();
+          if (!isEnabled) {
+            throw new Error(`Element ${selector} is not enabled for double click`);
+          }
           await element.dblclick();
         }, 2, 500);
         logger.info(`Double clicked on element: ${selector}`);
@@ -215,6 +228,12 @@ export class BasePage {
       try {
         logger.logAction('Right click', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible and enabled
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        const isEnabled = await element.isEnabled();
+        if (!isEnabled) {
+          throw new Error(`Element ${selector} is not enabled for right click`);
+        }
         await element.click({ button: 'right' });
         logger.info(`Right clicked on element: ${selector}`);
       } catch (error) {
@@ -266,6 +285,12 @@ export class BasePage {
       try {
         logger.logAction('Clear', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible and editable
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        const isEditable = await element.isEditable();
+        if (!isEditable) {
+          throw new Error(`Element ${selector} is not editable`);
+        }
         await element.clear();
         logger.info(`Cleared element: ${selector}`);
       } catch (error) {
@@ -293,7 +318,12 @@ export class BasePage {
         logger.logAction(`Select option: ${value}`, selector);
         const element = this.resolveLocator(locator);
         await WaitHelper.retryWithBackoff(async () => {
+          // Wait for element to be visible and enabled
           await element.waitFor({ state: 'visible', timeout: 10000 });
+          const isEnabled = await element.isEnabled();
+          if (!isEnabled) {
+            throw new Error(`Element ${selector} is not enabled`);
+          }
           await element.selectOption(value);
         }, 2, 500);
         logger.info(`Selected option in element: ${selector}`);
@@ -317,6 +347,12 @@ export class BasePage {
       try {
         logger.logAction('Check', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible and enabled
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        const isEnabled = await element.isEnabled();
+        if (!isEnabled) {
+          throw new Error(`Element ${selector} is not enabled`);
+        }
         await element.check();
         logger.info(`Checked element: ${selector}`);
       } catch (error) {
@@ -339,6 +375,12 @@ export class BasePage {
       try {
         logger.logAction('Uncheck', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible and enabled
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        const isEnabled = await element.isEnabled();
+        if (!isEnabled) {
+          throw new Error(`Element ${selector} is not enabled`);
+        }
         await element.uncheck();
         logger.info(`Unchecked element: ${selector}`);
       } catch (error) {
@@ -361,6 +403,8 @@ export class BasePage {
       try {
         logger.logAction('Hover', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible
+        await element.waitFor({ state: 'visible', timeout: 10000 });
         await element.hover();
         logger.info(`Hovered over element: ${selector}`);
       } catch (error) {
@@ -383,6 +427,8 @@ export class BasePage {
       try {
         logger.logAction('Focus', selector);
         const element = this.resolveLocator(locator);
+        // Wait for element to be visible and attached
+        await element.waitFor({ state: 'visible', timeout: 10000 });
         await element.focus();
         logger.info(`Focused on element: ${selector}`);
       } catch (error) {
@@ -433,7 +479,20 @@ export class BasePage {
         logger.logAction(`Drag and drop from ${sourceSelector} to ${targetSelector}`);
         const sourceElement = this.resolveLocator(source);
         const targetElement = this.resolveLocator(target);
-        await sourceElement.dragTo(targetElement);
+        
+        await WaitHelper.retryWithBackoff(async () => {
+          // Wait for source element to be visible and enabled
+          await sourceElement.waitFor({ state: 'visible', timeout: 10000 });
+          await WaitHelper.waitForCondition(async () => {
+            return await sourceElement.isEnabled();
+          }, 5000, 200);
+          
+          // Wait for target element to be visible
+          await targetElement.waitFor({ state: 'visible', timeout: 10000 });
+          
+          await sourceElement.dragTo(targetElement);
+        }, 2, 500);
+        
         logger.info(`Dragged element from ${sourceSelector} to ${targetSelector}`);
       } catch (error) {
         logger.error(`Failed to drag and drop: ${(error as Error).message}`);
@@ -507,7 +566,15 @@ export class BasePage {
         logger.logAction(`Upload file: ${filePath}`, selector);
         const element = this.resolveLocator(locator);
         await WaitHelper.retryWithBackoff(async () => {
+          // Wait for element to be visible and attached
+          await element.waitFor({ state: 'visible', timeout: 10000 });
           await element.waitFor({ state: 'attached', timeout: 10000 });
+          
+          // Verify element is enabled before attempting upload
+          await WaitHelper.waitForCondition(async () => {
+            return await element.isEnabled();
+          }, 5000, 200);
+          
           await element.setInputFiles(filePath);
         }, 2, 500);
         logger.info(`Uploaded file to element: ${selector}`);

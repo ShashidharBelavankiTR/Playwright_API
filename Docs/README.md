@@ -15,6 +15,7 @@ A production-ready, enterprise-grade test automation framework built with Playwr
 - **Custom Fixtures** - Extended Playwright fixtures with auto-cookie acceptance
 - **Advanced Logging** - Winston-based logging with file and console output
 - **Screenshot Management** - Organized screenshot capture with timestamps
+- **Assertions Utility** - Comprehensive assertion methods with detailed logging and Playwright steps integration
 - **Helper Utilities** - DateTime, String, Wait helpers and more
 - **Error Handling** - Robust try-catch blocks with custom exceptions
 - **Environment Configuration** - .env based configuration management
@@ -43,6 +44,7 @@ playwright-framework/
 │   │   ├── StringHelper.ts
 │   │   └── WaitHelper.ts
 │   ├── utils/              # Utility functions
+│   │   ├── Assertions.ts   # Comprehensive assertion utility
 │   │   ├── Logger.ts
 │   │   ├── TestDataManager.ts
 │   │   └── ScreenshotManager.ts
@@ -179,20 +181,26 @@ Reports are generated in the `reports/` directory:
 ### UI Test Example
 
 ```typescript
-import { test, expect } from '../../src/fixtures/baseFixtures';
+import { test } from '../../src/fixtures/baseFixtures';
+import { assert } from '../../src/utils/Assertions';
 
 test.describe('Feature Tests', () => {
-  test('should perform action', async ({ pages, testData }) => {
+  test('should perform action', async ({ page, pages, testData }) => {
     // Get test data
     const data = testData.getData('testData', 'users.validUser');
     
     // Use page objects
     await pages.loginPage.goto();
+    
+    // Use Assertions utility for detailed logging
+    await assert.toHaveURL(page, /\/login/, 'Should be on login page');
+    
     await pages.loginPage.login(data.email, data.password);
     
-    // Verify results
+    // Verify results with detailed assertions
     await pages.homePage.verifyPageLoaded();
-    expect(await pages.homePage.isUserLoggedIn()).toBeTruthy();
+    const isLoggedIn = await pages.homePage.isUserLoggedIn();
+    await assert.assertTruthy(isLoggedIn, 'User should be logged in');
   });
 });
 ```
@@ -200,7 +208,8 @@ test.describe('Feature Tests', () => {
 ### API Test Example
 
 ```typescript
-import { test, expect } from '../../src/fixtures/baseFixtures';
+import { test } from '../../src/fixtures/baseFixtures';
+import { assert } from '../../src/utils/Assertions';
 import { ResponseHelper, PayloadBuilder } from '../../src/helpers';
 
 test.describe('API Tests', () => {
@@ -213,13 +222,64 @@ test.describe('API Tests', () => {
     // Make API call
     const response = await apiServices.userService.createUser(userData);
     
-    // Assert response
-    ResponseHelper.assertStatusCode(response, 201);
+    // Assert response with detailed logging
+    await assert.toHaveStatusCode(response, 201, 'Should create user');
+    await assert.toBeOK(response, 'Response should be successful');
+    
     const user = await ResponseHelper.parseJSON(response);
-    expect(user).toHaveProperty('id');
+    await assert.assertHasProperty(user, 'id', 'User should have ID');
   });
 });
 ```
+
+### Using Assertions Utility
+
+The framework includes a comprehensive Assertions utility with 40+ methods:
+
+```typescript
+import { assert } from '../../src/utils/Assertions';
+
+// Element visibility
+await assert.toBeVisible(locator, 'Element should be visible');
+await assert.toBeHidden(locator, 'Element should be hidden');
+
+// Element state
+await assert.toBeEnabled(button, 'Button should be enabled');
+await assert.toBeChecked(checkbox, 'Checkbox should be checked');
+
+// Text content
+await assert.toContainText(element, 'Expected text');
+await assert.toHaveText(element, 'Exact text');
+
+// Values and attributes
+await assert.toHaveValue(input, 'value');
+await assert.toHaveAttribute(link, 'href', 'url');
+await assert.toHaveClass(element, 'className');
+
+// Page assertions
+await assert.toHaveURL(page, /pattern/);
+await assert.toHaveTitle(page, 'Title');
+
+// API assertions
+await assert.toHaveStatusCode(response, 200);
+await assert.toBeOK(response);
+
+// Generic assertions
+await assert.assertEqual(actual, expected, 'Values should match');
+await assert.assertTruthy(value, 'Value should be truthy');
+await assert.assertArrayContains(array, value, 'Array should contain');
+
+// Soft assertions (non-blocking)
+await assert.softAssert(element, 'toBeVisible');
+```
+
+**Benefits:**
+- ✅ Automatic Playwright step integration
+- ✅ Detailed logging with unique step IDs
+- ✅ Enhanced error messages with actual vs expected values
+- ✅ Supports soft assertions for non-critical checks
+
+See [ASSERTIONS_GUIDE.md](ASSERTIONS_GUIDE.md) for complete documentation.
 
 ### Creating New Page Objects
 
