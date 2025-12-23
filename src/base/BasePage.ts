@@ -1,4 +1,4 @@
-import { Page, Locator, test, Download } from '@playwright/test';
+import { Page, Locator, test } from '@playwright/test';
 import { logger } from '../utils/Logger';
 import { WaitHelper } from '../helpers/WaitHelper';
 import {
@@ -6,6 +6,40 @@ import {
   ElementNotFoundException,
   TimeoutException,
 } from '../types';
+
+export type ModifierKey = 'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
+
+export type SwipeDirection = 'left' | 'right' | 'up' | 'down';
+
+export interface FillFormField {
+  locator: Locator | string;
+  value: string;
+  /**
+   * Optional: controls how the field is filled.
+   * - fill: uses locator.fill()
+   * - type: uses locator.pressSequentially()
+   */
+  mode?: 'fill' | 'type';
+  /** Optional delay between keystrokes (only when mode === 'type') */
+  delayMs?: number;
+}
+
+export interface CookieOptions {
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Lax' | 'None' | 'Strict';
+}
+
+export interface AlertResult {
+  message: string;
+}
+
+export interface PromptResult {
+  message: string;
+}
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -948,6 +982,795 @@ export class BasePage {
           `Type failed on ${selector}: ${(error as Error).message}`
         );
       }
+    });
+  }
+
+  // ==================== ENHANCEMENTS: ADVANCED ELEMENT INTERACTIONS ====================
+
+  /**
+   * Click at exact page coordinates
+   */
+  async clickWithCoordinates(x: number, y: number): Promise<void> {
+    await test.step(`Click with coordinates x:${x}, y:${y}`, async () => {
+      try {
+        logger.logAction('Click with coordinates', `x:${x}, y:${y}`);
+        await this.page.mouse.click(x, y);
+        logger.info(`Clicked at coordinates x:${x}, y:${y}`);
+      } catch (error) {
+        logger.error(`Failed to click at coordinates: ${(error as Error).message}`);
+        await this.takeScreenshot(`click-coordinates-error-${this.getTimestamp()}`);
+        throw new Error(`Click with coordinates failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  /**
+   * Click an element multiple times
+   */
+  async multiClick(locator: Locator | string, count: number): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Multi click (${count}x) on: ${selector}`, async () => {
+      try {
+        logger.logAction(`Multi click (${count}x)`, selector);
+        const element = this.resolveLocator(locator);
+
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          for (let i = 0; i < count; i++) {
+            await element.click();
+          }
+        }, 2, 500);
+
+        logger.info(`Multi clicked (${count}x) on element: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to multi click on ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`multiclick-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Multi click failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Click an element with a modifier key pressed (Ctrl/Shift/Alt/etc.)
+   */
+  async clickWithModifier(
+    locator: Locator | string,
+    modifier: ModifierKey,
+    options?: ClickOptions
+  ): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Click on ${selector} with modifier: ${modifier}`, async () => {
+      try {
+        logger.logAction('Click with modifier', `${selector} + ${modifier}`);
+        const element = this.resolveLocator(locator);
+
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await element.click({ ...options, modifiers: [modifier] });
+        }, 2, 500);
+
+        logger.info(`Clicked on element ${selector} with modifier ${modifier}`);
+      } catch (error) {
+        logger.error(
+          `Failed to click with modifier on ${selector}: ${(error as Error).message}`
+        );
+        await this.takeScreenshot(`click-modifier-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Click with modifier failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Swipe/flick on an element using mouse drag (works best on touch-like UIs in desktop context)
+   */
+  async swipe(
+    locator: Locator | string,
+    direction: SwipeDirection,
+    distance: number = 200
+  ): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Swipe ${direction} on: ${selector} (distance: ${distance})`, async () => {
+      try {
+        logger.logAction('Swipe', `${selector} ${direction} ${distance}`);
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+
+        const box = await element.boundingBox();
+        if (!box) throw new Error('Element bounding box not available');
+
+        const startX = box.x + box.width / 2;
+        const startY = box.y + box.height / 2;
+
+        let endX = startX;
+        let endY = startY;
+
+        switch (direction) {
+          case 'left':
+            endX = startX - distance;
+            break;
+          case 'right':
+            endX = startX + distance;
+            break;
+          case 'up':
+            endY = startY - distance;
+            break;
+          case 'down':
+            endY = startY + distance;
+            break;
+        }
+
+        await this.page.mouse.move(startX, startY);
+        await this.page.mouse.down();
+        await this.page.mouse.move(endX, endY, { steps: 10 });
+        await this.page.mouse.up();
+
+        logger.info(`Swiped ${direction} on ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to swipe on ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`swipe-error-${this.getTimestamp()}`);
+        throw new Error(`Swipe failed on ${selector}: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  /**
+   * Run a keyboard shortcut like 'Control+A', 'ControlOrMeta+S', etc.
+   */
+  async keyboardShortcut(keys: string): Promise<void> {
+    await test.step(`Keyboard shortcut: ${keys}`, async () => {
+      try {
+        logger.logAction('Keyboard shortcut', keys);
+        await this.page.keyboard.press(keys);
+        logger.info(`Executed keyboard shortcut: ${keys}`);
+      } catch (error) {
+        logger.error(`Failed to execute keyboard shortcut ${keys}: ${(error as Error).message}`);
+        throw new Error(`Keyboard shortcut failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  /**
+   * Type and optionally pause afterwards
+   */
+  async typeWithPause(
+    locator: Locator | string,
+    text: string,
+    pauseAfterMs: number = 0,
+    delayMs: number = 50
+  ): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Type with pause into: ${selector}`, async () => {
+      await this.type(locator, text, delayMs);
+      if (pauseAfterMs > 0) {
+        logger.info(`Pausing for ${pauseAfterMs}ms after typing into ${selector}`);
+        await this.page.waitForTimeout(pauseAfterMs);
+      }
+    });
+  }
+
+  // ==================== ENHANCEMENTS: FORM & INPUT ====================
+
+  /**
+   * Clear an input and fill a value
+   */
+  async clearAndFill(locator: Locator | string, text: string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Clear and fill "${text}" into: ${selector}`, async () => {
+      await this.clear(locator);
+      await this.fill(locator, text);
+    });
+  }
+
+  /**
+   * Fill multiple fields (locators + values) in one call
+   */
+  async fillForm(fields: FillFormField[]): Promise<void> {
+    await test.step(`Fill form with ${fields.length} field(s)`, async () => {
+      try {
+        logger.logAction('Fill form', `${fields.length} fields`);
+        for (const field of fields) {
+          const element = this.resolveLocator(field.locator);
+          const mode = field.mode ?? 'fill';
+
+          if (mode === 'type') {
+            const delay = field.delayMs ?? 50;
+            await element.waitFor({ state: 'visible', timeout: 10000 });
+            await element.pressSequentially(field.value, { delay });
+          } else {
+            await this.fill(field.locator, field.value);
+          }
+        }
+        logger.info('Form filled successfully');
+      } catch (error) {
+        logger.error(`Failed to fill form: ${(error as Error).message}`);
+        await this.takeScreenshot(`fillform-error-${this.getTimestamp()}`);
+        throw new Error(`Fill form failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  /**
+   * Extract all input/select/textarea values from a form element
+   */
+  async getFormData(formLocator: Locator | string): Promise<Record<string, string>> {
+    const selector = typeof formLocator === 'string' ? formLocator : 'form';
+    return await test.step(`Get form data from: ${selector}`, async () => {
+      try {
+        logger.logAction('Get form data', selector);
+        const form = this.resolveLocator(formLocator);
+
+        const data = await form.evaluate((root) => {
+          const values: Record<string, string> = {};
+          const elements = root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+            'input, select, textarea'
+          );
+
+          for (const el of Array.from(elements)) {
+            const name = el.getAttribute('name') || el.getAttribute('id') || el.getAttribute('data-testid');
+            if (!name) continue;
+
+            if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+              values[name] = String(el.checked);
+            } else {
+              values[name] = (el as any).value ?? '';
+            }
+          }
+          return values;
+        });
+
+        logger.info(`Extracted form data keys: ${Object.keys(data).join(', ')}`);
+        return data;
+      } catch (error) {
+        logger.error(`Failed to get form data from ${selector}: ${(error as Error).message}`);
+        throw new Error(`Get form data failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  /**
+   * Select option(s) by visible label
+   */
+  async selectByLabel(locator: Locator | string, label: string | string[]): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Select by label "${label}" in: ${selector}`, async () => {
+      try {
+        logger.logAction('Select by label', `${selector} -> ${label}`);
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+
+        const labels = Array.isArray(label) ? label : [label];
+        await element.selectOption(labels.map((l) => ({ label: l })));
+
+        logger.info(`Selected by label in element: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to select by label in ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`selectbylabel-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Select by label failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Select option(s) by value
+   */
+  async selectByValue(locator: Locator | string, value: string | string[]): Promise<void> {
+    await this.selectOption(locator, value);
+  }
+
+  /**
+   * Handle date picker by filling an <input type="date"> or similar date input
+   * Date format depends on the control (often YYYY-MM-DD).
+   */
+  async handleDatePicker(locator: Locator | string, date: string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Handle date picker "${date}" in: ${selector}`, async () => {
+      try {
+        logger.logAction('Handle date picker', `${selector} -> ${date}`);
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        await element.fill(date);
+        logger.info(`Date set in ${selector}: ${date}`);
+      } catch (error) {
+        logger.error(`Failed to handle date picker in ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`datepicker-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Date picker failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Handle time picker by filling an <input type="time"> or similar time input
+   */
+  async handleTimePicker(locator: Locator | string, time: string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Handle time picker "${time}" in: ${selector}`, async () => {
+      try {
+        logger.logAction('Handle time picker', `${selector} -> ${time}`);
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'visible', timeout: 10000 });
+        await element.fill(time);
+        logger.info(`Time set in ${selector}: ${time}`);
+      } catch (error) {
+        logger.error(`Failed to handle time picker in ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`timepicker-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Time picker failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  // ==================== ENHANCEMENTS: DOM & ELEMENT UTILITIES ====================
+
+  async getComputedStyle(locator: Locator | string, property: string): Promise<string> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get computed style "${property}" from: ${selector}`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const value = await element.evaluate(
+          (el, prop) => window.getComputedStyle(el as Element).getPropertyValue(prop as string),
+          property
+        );
+        logger.info(`Computed style ${property} for ${selector}: ${value}`);
+        return value;
+      } catch (error) {
+        logger.error(`Failed to get computed style for ${selector}: ${(error as Error).message}`);
+        throw new ElementNotFoundException(
+          `Get computed style failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  async getElementBoundingBox(
+    locator: Locator | string
+  ): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get bounding box for: ${selector}`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const box = await element.boundingBox();
+        logger.info(`Bounding box for ${selector}: ${JSON.stringify(box)}`);
+        return box;
+      } catch (error) {
+        logger.error(`Failed to get bounding box for ${selector}: ${(error as Error).message}`);
+        return null;
+      }
+    });
+  }
+
+  async getParentElement(locator: Locator | string): Promise<Locator> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get parent element of: ${selector}`, async () => {
+      const element = this.resolveLocator(locator);
+      return element.locator('xpath=..');
+    });
+  }
+
+  async getSiblingElements(locator: Locator | string): Promise<Locator> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get sibling elements of: ${selector}`, async () => {
+      const element = this.resolveLocator(locator);
+      return element.locator('xpath=../*');
+    });
+  }
+
+  async getChildElements(locator: Locator | string): Promise<Locator> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get child elements of: ${selector}`, async () => {
+      const element = this.resolveLocator(locator);
+      return element.locator(':scope > *');
+    });
+  }
+
+  async isElementInViewport(locator: Locator | string): Promise<boolean> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Check if ${selector} is in viewport`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const inViewport = await element.evaluate((el) => {
+          const r = (el as Element).getBoundingClientRect();
+          return (
+            r.top >= 0 &&
+            r.left >= 0 &&
+            r.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            r.right <= (window.innerWidth || document.documentElement.clientWidth)
+          );
+        });
+        logger.info(`Element ${selector} in viewport: ${inViewport}`);
+        return inViewport;
+      } catch (error) {
+        logger.error(`Failed viewport check for ${selector}: ${(error as Error).message}`);
+        return false;
+      }
+    });
+  }
+
+  async getElementTagName(locator: Locator | string): Promise<string> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get tag name for: ${selector}`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const tagName = await element.evaluate((el) => (el as Element).tagName.toLowerCase());
+        logger.info(`Tag name for ${selector}: ${tagName}`);
+        return tagName;
+      } catch (error) {
+        logger.error(`Failed to get tag name for ${selector}: ${(error as Error).message}`);
+        throw new ElementNotFoundException(
+          `Get tag name failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  async hasClass(locator: Locator | string, className: string): Promise<boolean> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Check if ${selector} has class "${className}"`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const has = await element.evaluate((el, cls) => (el as Element).classList.contains(cls as string), className);
+        logger.info(`Element ${selector} has class "${className}": ${has}`);
+        return has;
+      } catch (error) {
+        logger.error(`Failed class check for ${selector}: ${(error as Error).message}`);
+        return false;
+      }
+    });
+  }
+
+  async getAllAttributes(locator: Locator | string): Promise<Record<string, string>> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get all attributes for: ${selector}`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        await element.waitFor({ state: 'attached', timeout: 10000 });
+        const attrs = await element.evaluate((el) => {
+          const out: Record<string, string> = {};
+          for (const attr of Array.from((el as Element).attributes)) {
+            out[attr.name] = attr.value;
+          }
+          return out;
+        });
+        logger.info(`Got ${Object.keys(attrs).length} attributes for ${selector}`);
+        return attrs;
+      } catch (error) {
+        logger.error(`Failed to get attributes for ${selector}: ${(error as Error).message}`);
+        throw new ElementNotFoundException(
+          `Get all attributes failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  // ==================== ENHANCEMENTS: BROWSER INTERACTIONS ====================
+
+  async handleAlert(action: 'accept' | 'dismiss' | 'getText' = 'accept'): Promise<AlertResult> {
+    return await test.step(`Handle alert: ${action}`, async () => {
+      let message = '';
+      const handler = async (dialog: any) => {
+        message = dialog.message();
+        if (action === 'dismiss') await dialog.dismiss();
+        else await dialog.accept();
+      };
+
+      try {
+        this.page.once('dialog', handler);
+        logger.logAction('Handle alert', action);
+        logger.info('Alert handler attached (will trigger on next dialog)');
+        return { message };
+      } catch (error) {
+        logger.error(`Failed to handle alert: ${(error as Error).message}`);
+        throw new Error(`Handle alert failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async handlePrompt(
+    action: 'accept' | 'dismiss' | 'getText' = 'accept',
+    text?: string
+  ): Promise<PromptResult> {
+    return await test.step(`Handle prompt: ${action}`, async () => {
+      let message = '';
+      const handler = async (dialog: any) => {
+        message = dialog.message();
+        if (action === 'dismiss') {
+          await dialog.dismiss();
+        } else {
+          await dialog.accept(text);
+        }
+      };
+
+      try {
+        this.page.once('dialog', handler);
+        logger.logAction('Handle prompt', `${action}${text ? ` (${text})` : ''}`);
+        logger.info('Prompt handler attached (will trigger on next dialog)');
+        return { message };
+      } catch (error) {
+        logger.error(`Failed to handle prompt: ${(error as Error).message}`);
+        throw new Error(`Handle prompt failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async setCookie(name: string, value: string, options: CookieOptions = {}): Promise<void> {
+    await test.step(`Set cookie: ${name}`, async () => {
+      try {
+        logger.logAction('Set cookie', name);
+        await this.page.context().addCookies([
+          {
+            name,
+            value,
+            url: options.domain ? undefined : this.page.url(),
+            domain: options.domain,
+            path: options.path,
+            expires: options.expires,
+            httpOnly: options.httpOnly,
+            secure: options.secure,
+            sameSite: options.sameSite,
+          },
+        ]);
+        logger.info(`Cookie set: ${name}`);
+      } catch (error) {
+        logger.error(`Failed to set cookie ${name}: ${(error as Error).message}`);
+        throw new Error(`Set cookie failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getCookie(name: string): Promise<string | undefined> {
+    return await test.step(`Get cookie: ${name}`, async () => {
+      try {
+        logger.logAction('Get cookie', name);
+        const cookies = await this.page.context().cookies();
+        const cookie = cookies.find((c) => c.name === name);
+        logger.info(`Cookie ${name} value: ${cookie?.value}`);
+        return cookie?.value;
+      } catch (error) {
+        logger.error(`Failed to get cookie ${name}: ${(error as Error).message}`);
+        return undefined;
+      }
+    });
+  }
+
+  async deleteCookie(name: string): Promise<void> {
+    await test.step(`Delete cookie: ${name}`, async () => {
+      try {
+        logger.logAction('Delete cookie', name);
+        const cookies = await this.page.context().cookies();
+        const target = cookies.find((c) => c.name === name);
+        if (!target) return;
+
+        await this.page.context().addCookies([
+          {
+            name,
+            value: '',
+            url: target.domain ? undefined : this.page.url(),
+            domain: target.domain || undefined,
+            path: target.path || '/',
+            expires: 0,
+          },
+        ]);
+
+        logger.info(`Cookie deleted: ${name}`);
+      } catch (error) {
+        logger.error(`Failed to delete cookie ${name}: ${(error as Error).message}`);
+        throw new Error(`Delete cookie failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getAllCookies(): Promise<Array<{ name: string; value: string }>> {
+    return await test.step('Get all cookies', async () => {
+      try {
+        logger.logAction('Get all cookies');
+        const cookies = await this.page.context().cookies();
+        logger.info(`Got ${cookies.length} cookies`);
+        return cookies.map((c) => ({ name: c.name, value: c.value }));
+      } catch (error) {
+        logger.error(`Failed to get all cookies: ${(error as Error).message}`);
+        return [];
+      }
+    });
+  }
+
+  async setLocalStorage(key: string, value: string): Promise<void> {
+    await test.step(`Set localStorage: ${key}`, async () => {
+      try {
+        logger.logAction('Set localStorage', key);
+        await this.page.evaluate(
+          ([k, v]) => {
+            window.localStorage.setItem(k, v);
+          },
+          [key, value]
+        );
+        logger.info(`localStorage set: ${key}`);
+      } catch (error) {
+        logger.error(`Failed to set localStorage ${key}: ${(error as Error).message}`);
+        throw new Error(`Set localStorage failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getLocalStorage(key: string): Promise<string | null> {
+    return await test.step(`Get localStorage: ${key}`, async () => {
+      try {
+        logger.logAction('Get localStorage', key);
+        const value = await this.page.evaluate((k) => window.localStorage.getItem(k), key);
+        logger.info(`localStorage ${key} value: ${value}`);
+        return value;
+      } catch (error) {
+        logger.error(`Failed to get localStorage ${key}: ${(error as Error).message}`);
+        return null;
+      }
+    });
+  }
+
+  async setSessionStorage(key: string, value: string): Promise<void> {
+    await test.step(`Set sessionStorage: ${key}`, async () => {
+      try {
+        logger.logAction('Set sessionStorage', key);
+        await this.page.evaluate(
+          ([k, v]) => {
+            window.sessionStorage.setItem(k, v);
+          },
+          [key, value]
+        );
+        logger.info(`sessionStorage set: ${key}`);
+      } catch (error) {
+        logger.error(`Failed to set sessionStorage ${key}: ${(error as Error).message}`);
+        throw new Error(`Set sessionStorage failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getSessionStorage(key: string): Promise<string | null> {
+    return await test.step(`Get sessionStorage: ${key}`, async () => {
+      try {
+        logger.logAction('Get sessionStorage', key);
+        const value = await this.page.evaluate((k) => window.sessionStorage.getItem(k), key);
+        logger.info(`sessionStorage ${key} value: ${value}`);
+        return value;
+      } catch (error) {
+        logger.error(`Failed to get sessionStorage ${key}: ${(error as Error).message}`);
+        return null;
+      }
+    });
+  }
+
+  async clearStorage(): Promise<void> {
+    await test.step('Clear storage', async () => {
+      try {
+        logger.logAction('Clear storage');
+        await this.page.evaluate(() => {
+          window.localStorage.clear();
+          window.sessionStorage.clear();
+        });
+        logger.info('Storage cleared');
+      } catch (error) {
+        logger.error(`Failed to clear storage: ${(error as Error).message}`);
+        throw new Error(`Clear storage failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getPageTitle(): Promise<string> {
+    return await test.step('Get page title', async () => {
+      try {
+        const title = await this.page.title();
+        logger.info(`Page title: ${title}`);
+        return title;
+      } catch (error) {
+        logger.error(`Failed to get page title: ${(error as Error).message}`);
+        throw new Error(`Get page title failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  async getCurrentURL(): Promise<string> {
+    return await test.step('Get current URL', async () => {
+      try {
+        const url = this.page.url();
+        logger.info(`Current URL: ${url}`);
+        return url;
+      } catch (error) {
+        logger.error(`Failed to get current URL: ${(error as Error).message}`);
+        throw new Error(`Get current URL failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
+  // ==================== ENHANCEMENTS: SHADOW DOM & COMPLEX SELECTORS ====================
+
+  /**
+   * Find an element inside a shadow root
+   */
+  async findInShadowDOM(shadowHost: Locator | string, selector: string): Promise<Locator> {
+    const hostName = typeof shadowHost === 'string' ? shadowHost : 'shadowHost';
+    return await test.step(`Find in shadow DOM: ${hostName} -> ${selector}`, async () => {
+      const host = this.resolveLocator(shadowHost);
+      return host.locator(`css=:scope >> shadow=${selector}`);
+    });
+  }
+
+  async clickInShadowDOM(shadowHost: Locator | string, selector: string): Promise<void> {
+    const hostName = typeof shadowHost === 'string' ? shadowHost : 'shadowHost';
+    await test.step(`Click in shadow DOM: ${hostName} -> ${selector}`, async () => {
+      try {
+        const el = await this.findInShadowDOM(shadowHost, selector);
+        await el.click();
+        logger.info(`Clicked in shadow DOM: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to click in shadow DOM: ${(error as Error).message}`);
+        await this.takeScreenshot(`shadowdom-click-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Click in shadow DOM failed: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  async getShadowDOMElement(shadowHost: Locator | string, selector: string): Promise<Locator> {
+    return await this.findInShadowDOM(shadowHost, selector);
+  }
+
+  /**
+   * Traverse to element by chaining locators (selectors array).
+   * This is useful for deeply nested DOMs (not shadow DOM).
+   */
+  async traverseToElement(pathSelectors: Array<string>): Promise<Locator> {
+    return await test.step(`Traverse to element: ${pathSelectors.join(' -> ')}`, async () => {
+      if (pathSelectors.length === 0) throw new Error('pathSelectors cannot be empty');
+
+      let current: Locator = this.page.locator(pathSelectors[0]);
+      for (let i = 1; i < pathSelectors.length; i++) {
+        current = current.locator(pathSelectors[i]);
+      }
+      return current;
+    });
+  }
+
+  async findByXPath(xpath: string): Promise<Locator> {
+    return await test.step(`Find by XPath: ${xpath}`, async () => {
+      return this.page.locator(`xpath=${xpath}`);
+    });
+  }
+
+  async findByTestId(testId: string): Promise<Locator> {
+    return await test.step(`Find by test id: ${testId}`, async () => {
+      return this.page.getByTestId(testId);
+    });
+  }
+
+  async getAllElementsMatching(
+    selector: string
+  ): Promise<Array<{ index: number; text: string | null; visible: boolean }>> {
+    return await test.step(`Get all elements matching: ${selector}`, async () => {
+      const loc = this.page.locator(selector);
+      const count = await loc.count();
+      const results: Array<{ index: number; text: string | null; visible: boolean }> = [];
+      for (let i = 0; i < count; i++) {
+        const nth = loc.nth(i);
+        results.push({
+          index: i,
+          text: await nth.textContent(),
+          visible: await nth.isVisible(),
+        });
+      }
+      logger.info(`Matched ${count} elements for selector: ${selector}`);
+      return results;
     });
   }
 }
