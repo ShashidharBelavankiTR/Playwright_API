@@ -1,5 +1,6 @@
 import { Page, Locator, test, Download } from '@playwright/test';
 import { logger } from '../utils/Logger';
+import { WaitHelper } from '../helpers/WaitHelper';
 import {
   ClickOptions,
   ElementNotFoundException,
@@ -57,7 +58,9 @@ export class BasePage {
     await test.step(`Navigate to: ${url}`, async () => {
       try {
         logger.logAction('Navigate', url);
-        await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+        await WaitHelper.retryWithBackoff(async () => {
+          await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+        }, 2, 1000);
         logger.info(`Successfully navigated to: ${url}`);
       } catch (error) {
         logger.error(`Failed to navigate to ${url}: ${(error as Error).message}`);
@@ -128,7 +131,10 @@ export class BasePage {
       try {
         logger.logAction('Click', selector);
         const element = this.resolveLocator(locator);
-        await element.click(options);
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await element.click(options);
+        }, 2, 500);
         logger.info(`Clicked on element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to click on ${selector}: ${(error as Error).message}`);
@@ -150,13 +156,38 @@ export class BasePage {
       try {
         logger.logAction('Double click', selector);
         const element = this.resolveLocator(locator);
-        await element.dblclick();
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await element.dblclick();
+        }, 2, 500);
         logger.info(`Double clicked on element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to double click on ${selector}: ${(error as Error).message}`);
         await this.takeScreenshot(`doubleclick-error-${this.getTimestamp()}`);
         throw new ElementNotFoundException(
           `Double click failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Right click on an element
+   * @param locator Element locator or selector
+   */
+  async rightClick(locator: Locator | string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Right click on: ${selector}`, async () => {
+      try {
+        logger.logAction('Right click', selector);
+        const element = this.resolveLocator(locator);
+        await element.click({ button: 'right' });
+        logger.info(`Right clicked on element: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to right click on ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`rightclick-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Right click failed on ${selector}: ${(error as Error).message}`
         );
       }
     });
@@ -173,7 +204,13 @@ export class BasePage {
       try {
         logger.logAction(`Fill text: ${text}`, selector);
         const element = this.resolveLocator(locator);
-        await element.fill(text);
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await WaitHelper.waitForCondition(async () => {
+            return await element.isEnabled();
+          }, 5000, 200);
+          await element.fill(text);
+        }, 2, 500);
         logger.info(`Filled text into element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to fill text in ${selector}: ${(error as Error).message}`);
@@ -221,7 +258,10 @@ export class BasePage {
       try {
         logger.logAction(`Select option: ${value}`, selector);
         const element = this.resolveLocator(locator);
-        await element.selectOption(value);
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await element.selectOption(value);
+        }, 2, 500);
         logger.info(`Selected option in element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to select option in ${selector}: ${(error as Error).message}`);
@@ -300,6 +340,50 @@ export class BasePage {
   }
 
   /**
+   * Focus on an element
+   * @param locator Element locator or selector
+   */
+  async focus(locator: Locator | string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Focus on: ${selector}`, async () => {
+      try {
+        logger.logAction('Focus', selector);
+        const element = this.resolveLocator(locator);
+        await element.focus();
+        logger.info(`Focused on element: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to focus on ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`focus-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Focus failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Remove focus from an element
+   * @param locator Element locator or selector
+   */
+  async blur(locator: Locator | string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Blur: ${selector}`, async () => {
+      try {
+        logger.logAction('Blur', selector);
+        const element = this.resolveLocator(locator);
+        await element.blur();
+        logger.info(`Blurred element: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to blur ${selector}: ${(error as Error).message}`);
+        await this.takeScreenshot(`blur-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Blur failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
    * Drag and drop an element
    * @param source Source element
    * @param target Target element
@@ -327,6 +411,54 @@ export class BasePage {
     });
   }
 
+  // ==================== SCROLL METHODS ====================
+
+  /**
+   * Scroll element into view
+   * @param locator Element locator or selector
+   */
+  async scrollIntoView(locator: Locator | string): Promise<void> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    await test.step(`Scroll ${selector} into view`, async () => {
+      try {
+        logger.logAction('Scroll into view', selector);
+        const element = this.resolveLocator(locator);
+        await element.scrollIntoViewIfNeeded();
+        logger.info(`Scrolled element into view: ${selector}`);
+      } catch (error) {
+        logger.error(`Failed to scroll ${selector} into view: ${(error as Error).message}`);
+        await this.takeScreenshot(`scrollintoview-error-${this.getTimestamp()}`);
+        throw new ElementNotFoundException(
+          `Scroll into view failed for ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Scroll page by offsets
+   * @param xOffset Horizontal offset
+   * @param yOffset Vertical offset
+   */
+  async scrollBy(xOffset: number, yOffset: number): Promise<void> {
+    await test.step(`Scroll page by x:${xOffset}, y:${yOffset}`, async () => {
+      try {
+        logger.logAction('Scroll by offset', `x:${xOffset}, y:${yOffset}`);
+        await this.page.evaluate(
+          ([x, y]) => {
+            window.scrollBy(x, y);
+          },
+          [xOffset, yOffset]
+        );
+        logger.info(`Scrolled page by x:${xOffset}, y:${yOffset}`);
+      } catch (error) {
+        logger.error(`Failed to scroll by offsets: ${(error as Error).message}`);
+        await this.takeScreenshot(`scrollby-error-${this.getTimestamp()}`);
+        throw new Error(`Scroll by failed: ${(error as Error).message}`);
+      }
+    });
+  }
+
   // ==================== UPLOAD/DOWNLOAD METHODS ====================
 
   /**
@@ -340,7 +472,10 @@ export class BasePage {
       try {
         logger.logAction(`Upload file: ${filePath}`, selector);
         const element = this.resolveLocator(locator);
-        await element.setInputFiles(filePath);
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'attached', timeout: 10000 });
+          await element.setInputFiles(filePath);
+        }, 2, 500);
         logger.info(`Uploaded file to element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to upload file to ${selector}: ${(error as Error).message}`);
@@ -364,18 +499,21 @@ export class BasePage {
         logger.logAction('Download file', selector);
         const element = this.resolveLocator(locator);
 
-        const [download] = await Promise.all([
-          this.page.waitForEvent('download'),
-          element.click(),
-        ]);
+        return await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          const [download] = await Promise.all([
+            this.page.waitForEvent('download', { timeout: 30000 }),
+            element.click(),
+          ]);
 
-        const downloadPath = path.join(
-          'downloads',
-          `${this.getTimestamp()}-${download.suggestedFilename()}`
-        );
-        await download.saveAs(downloadPath);
-        logger.info(`Downloaded file to: ${downloadPath}`);
-        return downloadPath;
+          const downloadPath = path.join(
+            'downloads',
+            `${this.getTimestamp()}-${download.suggestedFilename()}`
+          );
+          await download.saveAs(downloadPath);
+          logger.info(`Downloaded file to: ${downloadPath}`);
+          return downloadPath;
+        }, 2, 1000);
       } catch (error) {
         logger.error(`Failed to download file: ${(error as Error).message}`);
         await this.takeScreenshot(`download-error-${this.getTimestamp()}`);
@@ -400,7 +538,18 @@ export class BasePage {
       try {
         logger.logAction(`Wait for element to be ${state}`, selector);
         const element = this.resolveLocator(locator);
-        await element.waitFor({ state });
+        const success = await WaitHelper.waitForCondition(async () => {
+          try {
+            await element.waitFor({ state, timeout: 2000 });
+            return true;
+          } catch {
+            return false;
+          }
+        }, 30000, 500);
+        
+        if (!success) {
+          throw new Error(`Element did not reach ${state} state within timeout`);
+        }
         logger.info(`Element ${selector} is ${state}`);
       } catch (error) {
         logger.error(
@@ -447,6 +596,25 @@ export class BasePage {
         logger.error(`Failed to wait for ${state}: ${(error as Error).message}`);
         throw new TimeoutException(
           `Wait for ${state} failed: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Wait for specified timeout
+   * @param duration Duration in milliseconds
+   */
+  async waitForTimeout(duration: number): Promise<void> {
+    await test.step(`Wait for ${duration}ms`, async () => {
+      try {
+        logger.logAction('Wait timeout', `${duration}ms`);
+        await this.page.waitForTimeout(duration);
+        logger.info(`Waited for ${duration}ms`);
+      } catch (error) {
+        logger.error(`Failed while waiting ${duration}ms: ${(error as Error).message}`);
+        throw new TimeoutException(
+          `Wait timeout failed: ${(error as Error).message}`
         );
       }
     });
@@ -578,6 +746,28 @@ export class BasePage {
         );
         throw new ElementNotFoundException(
           `Get attribute failed on ${selector}: ${(error as Error).message}`
+        );
+      }
+    });
+  }
+
+  /**
+   * Get current input value
+   * @param locator Element locator or selector
+   * @returns Input value string
+   */
+  async getInputValue(locator: Locator | string): Promise<string> {
+    const selector = typeof locator === 'string' ? locator : 'element';
+    return await test.step(`Get input value from: ${selector}`, async () => {
+      try {
+        const element = this.resolveLocator(locator);
+        const value = await element.inputValue();
+        logger.info(`Got input value from ${selector}: ${value}`);
+        return value;
+      } catch (error) {
+        logger.error(`Failed to get input value from ${selector}: ${(error as Error).message}`);
+        throw new ElementNotFoundException(
+          `Get input value failed on ${selector}: ${(error as Error).message}`
         );
       }
     });
@@ -743,7 +933,13 @@ export class BasePage {
       try {
         logger.logAction(`Type text: ${text}`, selector);
         const element = this.resolveLocator(locator);
-        await element.pressSequentially(text, { delay });
+        await WaitHelper.retryWithBackoff(async () => {
+          await element.waitFor({ state: 'visible', timeout: 10000 });
+          await WaitHelper.waitForCondition(async () => {
+            return await element.isEnabled();
+          }, 5000, 200);
+          await element.pressSequentially(text, { delay });
+        }, 2, 500);
         logger.info(`Typed text into element: ${selector}`);
       } catch (error) {
         logger.error(`Failed to type in ${selector}: ${(error as Error).message}`);

@@ -94,12 +94,39 @@ export class UserAPIService extends APIClient {
 }
 
 /**
+ * DogFactsAPIService - API service for dog facts endpoint
+ * Demonstrates API testing with real API
+ */
+export class DogFactsAPIService extends APIClient {
+  private readonly factsEndpoint = '/facts';
+
+  constructor(request: APIRequestContext) {
+    super(request);
+  }
+
+  /**
+   * Get random dog facts
+   * @param count Number of facts to retrieve (default: 1)
+   * @returns API response with dog facts
+   */
+  async getDogFacts(count: number = 1) {
+    return await test.step(`Get ${count} dog fact(s)`, async () => {
+      return await this.get(this.factsEndpoint, {
+        params: { number: count.toString() },
+      });
+    });
+  }
+}
+
+/**
  * Export service class manager
  */
 export class APIServices {
   public readonly userService: UserAPIService;
+  public readonly dogFactsService: DogFactsAPIService;
 
   constructor(request: APIRequestContext) {
     this.userService = new UserAPIService(request);
+    this.dogFactsService = new DogFactsAPIService(request);
   }
 }

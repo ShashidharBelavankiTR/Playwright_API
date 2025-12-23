@@ -65,6 +65,9 @@ export default defineConfig({
       slowMo: Number(process.env.SLOW_MO) || 0,
     },
     
+    /* Ignore HTTPS errors for testing */
+    ignoreHTTPSErrors: true,
+    
     /* Emulate browser locale and timezone */
     locale: 'en-US',
     timezoneId: 'America/New_York',
