@@ -12,6 +12,8 @@ export class Logger {
   private static instance: Logger;
   private logger: winston.Logger;
   private logDir: string = 'reports/logs';
+  private currentTestLogFile: string | null = null;
+  private currentTestLogger: winston.Logger | null = null;
 
   private constructor() {
     this.ensureLogDirectoryExists();
@@ -95,6 +97,7 @@ export class Logger {
    */
   public error(message: string, meta?: any): void {
     this.logger.error(message, meta);
+    this.writeToTestLog('error', message, meta);
   }
 
   /**
@@ -104,6 +107,7 @@ export class Logger {
    */
   public warn(message: string, meta?: any): void {
     this.logger.warn(message, meta);
+    this.writeToTestLog('warn', message, meta);
   }
 
   /**
@@ -113,6 +117,7 @@ export class Logger {
    */
   public info(message: string, meta?: any): void {
     this.logger.info(message, meta);
+    this.writeToTestLog('info', message, meta);
   }
 
   /**
@@ -122,6 +127,7 @@ export class Logger {
    */
   public debug(message: string, meta?: any): void {
     this.logger.debug(message, meta);
+    this.writeToTestLog('debug', message, meta);
   }
 
   /**
@@ -176,6 +182,95 @@ export class Logger {
     this.info(`API Response: ${method} ${endpoint} - Status: ${status}`, {
       data: responseData,
     });
+  }
+
+  /**
+   * Start logging for a specific test
+   * Creates a dedicated log file for the test
+   * @param testName Name of the test
+   * @param testId Unique identifier for the test
+   */
+  public startTestLog(testName: string, testId: string): void {
+    const safeTestName = testName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `test-${safeTestName}-${timestamp}.log`;
+    this.currentTestLogFile = path.join(this.logDir, filename);
+
+    const logFormat = winston.format.combine(
+      winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+      winston.format.errors({ stack: true }),
+      winston.format.splat(),
+      winston.format.printf(({ timestamp, level, message, stack }) => {
+        return stack
+          ? `[${timestamp}] ${level.toUpperCase()}: ${message}\n${stack}`
+          : `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+      })
+    );
+
+    this.currentTestLogger = winston.createLogger({
+      level: config.get('logLevel'),
+      format: logFormat,
+      transports: [
+        new winston.transports.File({
+          filename: this.currentTestLogFile,
+          format: logFormat,
+        })
+      ],
+    });
+
+    this.currentTestLogger.info(`==================== TEST STARTED ====================`);
+    this.currentTestLogger.info(`Test: ${testName}`);
+    this.currentTestLogger.info(`Test ID: ${testId}`);
+    this.currentTestLogger.info(`Timestamp: ${new Date().toISOString()}`);
+    this.currentTestLogger.info(`======================================================`);
+  }
+
+  /**
+   * End logging for the current test
+   * @param status Test status (passed/failed/skipped)
+   */
+  public endTestLog(status: string): void {
+    if (this.currentTestLogger) {
+      this.currentTestLogger.info(`==================== TEST ENDED ====================`);
+      this.currentTestLogger.info(`Status: ${status.toUpperCase()}`);
+      this.currentTestLogger.info(`Timestamp: ${new Date().toISOString()}`);
+      this.currentTestLogger.info(`====================================================`);
+      this.currentTestLogger.close();
+      this.currentTestLogger = null;
+    }
+  }
+
+  /**
+   * Get the current test log file path
+   * @returns Path to the current test log file or null
+   */
+  public getCurrentTestLogFile(): string | null {
+    return this.currentTestLogFile;
+  }
+
+  /**
+   * Write to both global and test-specific log
+   * @param level Log level
+   * @param message Log message
+   * @param meta Additional metadata
+   */
+  private writeToTestLog(level: string, message: string, meta?: any): void {
+    if (this.currentTestLogger) {
+      switch(level) {
+        case 'error':
+          this.currentTestLogger.error(message, meta);
+          break;
+        case 'warn':
+          this.currentTestLogger.warn(message, meta);
+          break;
+        case 'info':
+          this.currentTestLogger.info(message, meta);
+          break;
+        case 'debug':
+          this.currentTestLogger.debug(message, meta);
+          break;
+      }
+    }
   }
 }
 
