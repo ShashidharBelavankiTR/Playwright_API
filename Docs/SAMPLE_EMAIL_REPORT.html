@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playwright Test Framework - Test Report</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      color: white;
+      padding: 40px 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    }
+    .header h1 {
+      margin: 0 0 15px 0;
+      font-size: 32px;
+      font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 1;
+    }
+    .header p {
+      margin: 8px 0;
+      font-size: 15px;
+      opacity: 0.95;
+      position: relative;
+      z-index: 1;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 12px 30px;
+      border-radius: 25px;
+      font-weight: 700;
+      font-size: 16px;
+      margin-top: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 1;
+    }
+    .status-success {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+    }
+    .status-failure {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+    }
+    .status-partial {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 25px;
+      padding: 40px;
+      background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+    }
+    .metric-card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px 20px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      border: none;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+    }
+    .metric-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .metric-card.passed::before { background: linear-gradient(90deg, #10b981 0%, #059669 100%); }
+    .metric-card.failed::before { background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); }
+    .metric-card.skipped::before { background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); }
+    .metric-card.total::before { background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%); }
+    .metric-card.duration::before { background: linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%); }
+    .metric-card.passed { background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); }
+    .metric-card.failed { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); }
+    .metric-card.skipped { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); }
+    .metric-card.total { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); }
+    .metric-card.duration { background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); }
+    .metric-value {
+      font-size: 42px;
+      font-weight: 800;
+      margin: 15px 0;
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .metric-label {
+      font-size: 12px;
+      color: #4b5563;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+    .section {
+      padding: 35px 40px;
+      border-bottom: 2px solid #e5e7eb;
+      background: linear-gradient(to right, #ffffff 0%, #fafafa 100%);
+    }
+    .section:nth-child(even) {
+      background: linear-gradient(to left, #ffffff 0%, #f9fafb 100%);
+    }
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 25px 0;
+      color: #111827;
+      display: flex;
+      align-items: center;
+    }
+    .section-title::before {
+      content: '';
+      width: 5px;
+      height: 28px;
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      margin-right: 15px;
+      border-radius: 3px;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 13px;
+      color: white;
+      border-bottom: none;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+      background: white;
+    }
+    tr:hover td {
+      background: linear-gradient(90deg, #f0f9ff 0%, #e0f2fe 100%);
+      transition: background 0.3s ease;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 15px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .status-passed { 
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+      color: white;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+    }
+    .status-failed { 
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+      color: white;
+      box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+    }
+    .status-skipped { 
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+      color: white;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3);
+    }
+    .status-flaky { 
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
+      color: white;
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3);
+    }
+    .error-box {
+      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+      border-left: 5px solid #ef4444;
+      padding: 18px;
+      margin: 12px 0;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #991b1b;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    }
+    .error-message {
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .error-stack {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #7f1d1d;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .file-path {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #374151;
+      background: linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .footer {
+      padding: 25px 40px;
+      text-align: center;
+      font-size: 13px;
+      color: #6b7280;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      opacity: 0.95;
+    }
+    .footer p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🎭 Playwright Test Framework</h1>
+      <p><strong>Environment:</strong> QA</p>
+      <p><strong>Execution Time:</strong> Dec 23, 2025, 19:46:23</p>
+      <p><strong>Total Duration:</strong> 14s 667ms</p>
+      <div class="status-badge status-failure">
+        ❌ Failed
+      </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="metrics">
+      <div class="metric-card total">
+        <div class="metric-label">Total Tests</div>
+        <div class="metric-value">2</div>
+      </div>
+      <div class="metric-card passed">
+        <div class="metric-label">Passed</div>
+        <div class="metric-value">0</div>
+      </div>
+      <div class="metric-card failed">
+        <div class="metric-label">Failed</div>
+        <div class="metric-value">2</div>
+      </div>
+      <div class="metric-card skipped">
+        <div class="metric-label">Skipped</div>
+        <div class="metric-value">0</div>
+      </div>
+      <div class="metric-card duration">
+        <div class="metric-label">Pass Rate</div>
+        <div class="metric-value">0%</div>
+      </div>
+    </div>
+
+    <!-- All Tests Detailed -->
+    <div class="section">
+      <h2 class="section-title">📋 All Tests</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Test Name</th>
+            <th>File</th>
+            <th>Project</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Should successfully login with valid credentials - Enhanced</strong></td>
+            <td><span class="file-path">login-enhanced.spec.ts</span></td>
+            <td>firefox</td>
+            <td>8s 854ms</td>
+            <td>
+              <span class="status-pill status-failed">
+                FAILED
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Should successfully login with valid credentials</strong></td>
+            <td><span class="file-path">login.spec.ts</span></td>
+            <td>firefox</td>
+            <td>4ms</td>
+            <td>
+              <span class="status-pill status-failed">
+                FAILED
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Slowest Tests -->
+    <div class="section">
+      <h2 class="section-title">🐌 Top 2 Slowest Tests</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Test Name</th>
+            <th>File</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Should successfully login with valid credentials - Enhanced</strong></td>
+            <td><span class="file-path">login-enhanced.spec.ts</span></td>
+            <td>8s 854ms</td>
+            <td>
+              <span class="status-pill status-failed">
+                FAILED
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Should successfully login with valid credentials</strong></td>
+            <td><span class="file-path">login.spec.ts</span></td>
+            <td>4ms</td>
+            <td>
+              <span class="status-pill status-failed">
+                FAILED
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Failures Summary -->
+    <div class="section">
+      <h2 class="section-title">🔴 Failing Tests Summary</h2>
+      
+      <div style="margin-bottom: 30px;">
+        <div class="file-path" style="display: inline-block; margin-bottom: 10px; font-size: 14px;">
+          📄 ui/login-enhanced.spec.ts
+        </div>
+        
+        <div style="margin-left: 20px; margin-bottom: 20px;">
+          <strong style="color: #111827;">Should successfully login with valid credentials - Enhanced</strong>
+          <div style="font-size: 13px; color: #6b7280; margin: 5px 0;">
+            Project: firefox | Duration: 8s 854ms
+          </div>
+          
+          <div class="error-box">
+            <div class="error-message">❌ TestDataException: Key 'users.validUser' not found in test data file: testData</div>
+            <div style="font-size: 12px; margin: 5px 0;">
+              📍 TestDataManager.ts:111:13
+            </div>
+            <details style="margin-top: 10px;">
+              <summary style="cursor: pointer; font-weight: 600;">View Stack Trace</summary>
+              <div class="error-stack">TestDataException: Key 'users.validUser' not found in test data file: testData
+    at TestDataManager.getData (TestDataManager.ts:111:13)
+    at login-enhanced.spec.ts:17:31</div>
+            </details>
+          </div>
+          
+          <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">
+            📸 Screenshot(s): 1 attached
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 30px;">
+        <div class="file-path" style="display: inline-block; margin-bottom: 10px; font-size: 14px;">
+          📄 ui/login.spec.ts
+        </div>
+        
+        <div style="margin-left: 20px; margin-bottom: 20px;">
+          <strong style="color: #111827;">Should successfully login with valid credentials</strong>
+          <div style="font-size: 13px; color: #6b7280; margin: 5px 0;">
+            Project: firefox | Duration: 4ms
+          </div>
+          
+          <div class="error-box">
+            <div class="error-message">❌ browserType.launch: Target page, context or browser has been closed</div>
+            <div style="font-size: 12px; margin: 5px 0;">
+              📍 Browser launch failed - Firefox process exited with code 2147483651
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>Generated by Playwright Email Reporter | Dec 24, 2025, 10:30:00</p>
+      <p>This is an automated test report. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
